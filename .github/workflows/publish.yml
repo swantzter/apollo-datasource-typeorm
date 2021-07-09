@@ -72,7 +72,7 @@ jobs:
           node-version: 14
           registry-url: https://npm.pkg.github.com/
       - run: npm ci --prefer-offline
-      - run: sed -i 's,"apollo-datasource-typesource","@swantzter/apollo-datasource-typesource",' package*.json
+      - run: sed -i 's,"apollo-datasource-typeorm","@swantzter/apollo-datasource-typeorm",' package*.json
       - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
