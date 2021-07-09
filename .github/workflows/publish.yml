@@ -12,12 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     services:
       db:
-        image: mcr.microsoft.com/mssql/server:2019-latest
+        image: mysql:latest
         env:
-          ACCEPT_EULA: 'Y'
-          SA_PASSWORD: mssql_strong_password
+          MYSQL_ROOT_PASSWORD: mysql_strong_password
+          MYSQL_DATABASE: test
         ports:
-          - 1433:1433
+          - 3306:3306
     steps:
       - uses: actions/checkout@v2
       - uses: actions/cache@v2
