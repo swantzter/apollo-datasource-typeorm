@@ -17,7 +17,7 @@ describe('TypeormDataSource', () => {
   before(async () => {
     await createConnection({
       type: 'mysql',
-      host: 'db',
+      host: process.env.DB_HOST ?? 'db',
       port: 3306,
       username: 'root',
       password: 'mysql_strong_password',

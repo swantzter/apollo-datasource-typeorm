@@ -33,6 +33,8 @@ jobs:
           node-version: 14
       - run: npm ci --prefer-offline
       - run: npm run coverage
+        env:
+          DB_HOST: localhost
 
   publish-npm:
     needs: test
