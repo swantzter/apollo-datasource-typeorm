@@ -6,10 +6,11 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.production.json",
-    "watch": "tsc --watch",
+    "watch": "npm run build -- --watch",
     "test": "ts-mocha tests/**/*.test.ts",
     "coverage": "nyc -r lcov -r text npm test",
     "lint": "eslint src/**/*.ts tests/**/*.ts",
+    "typecheck": "tsc --noEmit",
     "prepack": "npm run build"
   },
   "repository": {

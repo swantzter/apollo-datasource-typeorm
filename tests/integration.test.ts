@@ -1,5 +1,5 @@
 /* eslint-env mocha */
-import { createConnection, EntityTarget, getConnection } from 'typeorm'
+import { createConnection, getConnection } from 'typeorm'
 import assert from 'assert'
 
 import { TypeormDataSource } from '../src'
@@ -37,16 +37,6 @@ describe('TypeormDataSource', () => {
   afterEach(async () => {
     const connection = getConnection()
     await connection.getRepository(UserEntity).clear()
-  })
-
-  it('Should throw if not given a typeorm entity', async () => {
-    assert.throws(() => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const _ = new UserDataSource(true as unknown as EntityTarget<UserEntity>)
-    }, {
-      name: 'RepositoryNotFoundError',
-      message: 'No repository for "true" was found. Looks like this entity is not registered in current "default" connection?'
-    })
   })
 
   it('Should throw if not called on an initialised instance', async () => {

@@ -4,7 +4,7 @@ import { InMemoryLRUCache } from 'apollo-server-caching'
 
 import { Logger } from './helpers'
 import { createCachingMethods, CachedMethods, FindArgs } from './cache'
-import { DeepPartial, EntityTarget, getConnection, ObjectID, Repository, SelectQueryBuilder } from 'typeorm'
+import { DeepPartial, EntityTarget, getConnection, ObjectID, SelectQueryBuilder } from 'typeorm'
 
 export interface TypeormDataSourceOptions {
   logger?: Logger
@@ -24,8 +24,7 @@ export class TypeormDataSource<TEntity, TContext>
   implements CachedMethods<TEntity> {
   context?: TContext
   options: TypeormDataSourceOptions
-  repo: Repository<TEntity>
-  idColumn: string
+  entity: EntityTarget<TEntity>
   // these get set by the initializer but they must be defined or nullable after the constructor
   // runs, so we guard against using them before init
   findOneById: CachedMethods<TEntity>['findOneById'] = placeholderHandler
@@ -36,16 +35,11 @@ export class TypeormDataSource<TEntity, TContext>
   cache: CachedMethods<TEntity>['cache']
   cachePrefix: CachedMethods<TEntity>['cachePrefix']
 
-  /**
-   *
-   * @param query
-   * @param options
-   */
   async findManyByQuery (
     queryFunction: (qb: SelectQueryBuilder<TEntity>) => SelectQueryBuilder<TEntity>,
     { ttl }: QueryFindArgs = {}
   ) {
-    const qb = this.repo.createQueryBuilder()
+    const qb = getConnection(this.options.connectionName).getRepository(this.entity).createQueryBuilder()
     const results = await queryFunction(qb).getMany()
     // prime these into the dataloader and maybe the cache
     if (this.dataLoader && results) {
@@ -106,15 +100,20 @@ export class TypeormDataSource<TEntity, TContext>
   constructor (entity: EntityTarget<TEntity>, options: TypeormDataSourceOptions = {}) {
     super()
     options?.logger?.info('TypeormDataSource started')
-    const repo = getConnection(options.connectionName).getRepository(entity)
-
-    if (repo.metadata.hasMultiplePrimaryKeys) {
-      throw new ApolloError('TypeormDataSource currently doesn\'t support entities with multiple primary keys')
-    }
 
     this.options = options
-    this.repo = repo
-    this.idColumn = repo.metadata.primaryColumns[0].propertyName
+    this.entity = entity
+  }
+
+  private get repo () {
+    return getConnection(this.options.connectionName).getRepository(this.entity)
+  }
+
+  private get idColumn () {
+    if (this.repo.metadata.hasMultiplePrimaryKeys) {
+      throw new ApolloError('TypeormDataSource currently doesn\'t support entities with multiple primary keys')
+    }
+    return this.repo.metadata.primaryColumns[0].propertyName
   }
 
   initialize ({
@@ -124,7 +123,7 @@ export class TypeormDataSource<TEntity, TContext>
     this.context = context
 
     const methods = createCachingMethods<TEntity>({
-      repo: this.repo,
+      entity: this.entity,
       cache: cache ?? new InMemoryLRUCache(),
       options: this.options
     })

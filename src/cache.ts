@@ -1,7 +1,7 @@
 import { KeyValueCache } from 'apollo-server-caching'
 import { EJSON } from 'bson'
 import DataLoader from 'dataloader'
-import { Repository } from 'typeorm'
+import { EntityTarget, getConnection } from 'typeorm'
 import { ID, TypeormDataSourceOptions } from './datasource'
 
 // https://github.com/graphql/dataloader#batch-function
@@ -30,7 +30,7 @@ const orderDocs = <V>(ids: readonly ID[], idColumn: string) => (
 }
 
 export interface createCatchingMethodArgs<DType> {
-  repo: Repository<DType>
+  entity: EntityTarget<DType>
   cache: KeyValueCache
   options: TypeormDataSourceOptions
 }
@@ -53,21 +53,25 @@ export interface CachedMethods<DType> {
 }
 
 export const createCachingMethods = <DType>({
-  repo,
+  entity,
   cache,
   options
 }: createCatchingMethodArgs<DType>): CachedMethods<DType> => {
+  const getRepo = () => getConnection(options.connectionName).getRepository(entity)
+  const getIdColumn = () => getRepo().metadata.primaryColumns[0].propertyName
+
   const loader = new DataLoader<ID, DType>(async (ids) => {
-    const results = await repo.findByIds([...ids])
+    const results = await getRepo().findByIds([...ids])
     options?.logger?.debug(
       `TypeormDataSource/DataLoader: response count: ${results.length}`
     )
 
-    return orderDocs<DType>(ids, idColumn)(results)
+    return orderDocs<DType>(ids, getIdColumn())(results)
   })
 
-  const cachePrefix = `typeorm-${repo.metadata.name}-`
-  const idColumn = repo.metadata.primaryColumns[0].propertyName
+  const cachePrefix = `typeorm-${(entity as any).name}`
+
+  console.log(cachePrefix)
 
   const methods: CachedMethods<DType> = {
     findOneById: async (id, { ttl } = {}) => {
@@ -76,7 +80,7 @@ export const createCachingMethods = <DType>({
 
       const cacheDoc = await cache.get(key)
       if (cacheDoc) {
-        return repo.create(EJSON.parse(cacheDoc) as DType)
+        return getRepo().create(EJSON.parse(cacheDoc) as DType)
       }
 
       const doc = await loader.load(id)
@@ -105,8 +109,8 @@ export const createCachingMethods = <DType>({
     primeLoader: async (entities, ttl?: number) => {
       entities = Array.isArray(entities) ? entities : [entities]
       for (const entity of entities) {
-        loader.prime((entity as any)[idColumn], entity)
-        const key = `${cachePrefix}${(entity as any)[idColumn]}`
+        loader.prime((entity as any)[getIdColumn()], entity)
+        const key = `${cachePrefix}${(entity as any)[getIdColumn()]}`
         if (!!ttl || !!(await cache.get(key))) {
           await cache.set(key, EJSON.stringify(entity), { ttl })
         }
