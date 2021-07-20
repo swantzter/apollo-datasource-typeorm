@@ -1,6 +1,6 @@
-import { DataSource } from 'apollo-datasource'
+import { DataSource, DataSourceConfig } from 'apollo-datasource'
 import { ApolloError } from 'apollo-server-errors'
-import { InMemoryLRUCache, KeyValueCache } from 'apollo-server-caching'
+import { InMemoryLRUCache } from 'apollo-server-caching'
 
 import { isTypeormRepository, Logger } from './helpers'
 import { createCachingMethods, CachedMethods, FindArgs } from './cache'
@@ -125,7 +125,7 @@ export class TypeormDataSource<TEntity, TContext>
   initialize ({
     context,
     cache
-  }: { context?: TContext, cache?: KeyValueCache } = {}) {
+  }: DataSourceConfig<TContext>) {
     this.context = context
 
     const methods = createCachingMethods<TEntity>({
