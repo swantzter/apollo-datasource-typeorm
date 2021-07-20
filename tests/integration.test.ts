@@ -4,10 +4,9 @@ import assert from 'assert'
 
 import { TypeormDataSource } from '../src'
 import { UserEntity } from './entity/user'
+import { InMemoryLRUCache } from 'apollo-server-caching'
 
-interface Context {
-  example?: string
-}
+type Context = null
 
 class UserDataSource extends TypeormDataSource<UserEntity, Context> {}
 
@@ -33,7 +32,7 @@ describe('TypeormDataSource', () => {
   beforeEach(() => {
     const connection = getConnection()
     userSource = new UserDataSource(connection.getRepository(UserEntity))
-    userSource.initialize({})
+    userSource.initialize({ context: null, cache: new InMemoryLRUCache() })
   })
 
   afterEach(async () => {
@@ -120,7 +119,7 @@ describe('TypeormDataSource', () => {
 
       const { id: createdId, ...created } = await userSource.createOne(createData, { ttl: 60 })
       const { id: updatedId } = await userSource.updateOnePartial(createdId, updateData)
-      const { id: refetchedId, ...refetched } = await userSource.findOneById(createdId, { ttl: 60 })
+      const { id: refetchedId, ...refetched } = await userSource.findOneById(createdId, { ttl: 60 }) as UserEntity
 
       assert.strictEqual(updatedId, refetchedId)
       assert.deepStrictEqual({ email: refetched.email, name: refetched.name }, { ...createData, ...updateData })

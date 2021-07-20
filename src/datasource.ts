@@ -84,9 +84,8 @@ export class TypeormDataSource<TEntity, TContext>
     await this.repo.update((data as any)[this.idColumn], data)
 
     const result = await this.repo.findOne((data as any)[this.idColumn])
-    if (result) {
-      this.primeLoader(result)
-    }
+    if (!result) throw new ApolloError('Failed to update entity')
+    this.primeLoader(result)
     return result
   }
 
@@ -98,9 +97,8 @@ export class TypeormDataSource<TEntity, TContext>
     await this.repo.update(id, cleanData)
 
     const result = await this.repo.findOne(id)
-    if (result) {
-      this.primeLoader(result)
-    }
+    if (!result) throw new ApolloError('Failed to update entity')
+    this.primeLoader(result)
     return result
   }
 
