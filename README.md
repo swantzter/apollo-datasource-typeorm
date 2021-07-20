@@ -9,9 +9,12 @@ This is a TypeORM DataSource for Apollo GraphQL Servers. It was adapted from the
 
 ## Usage
 
-Use by creating a new class extending the `TypeormDataSource`, with the desired entity type.
-Use separate DataSources for each entity type. Initialise the class
-by passing an entity repository created by the TypeORM library.
+Use by creating a new class extending the `TypeormDataSource`, with the desired
+entity type. Use separate DataSources for each entity type. Initialise the class
+by passing the entity. Ensure that you have run `createConnection` before
+initialising your data sources since this library will use `getConnection` to
+obtain a repository. If you have multiple connections you can pass the
+`connectionName` in the data source options.
 
 ```typescript
 @Entity()
@@ -39,8 +42,8 @@ const server = new ApolloServer({
   typeDefs,
   resolvers,
   dataSources: () => ({
-    users: new UserDataSource(getConnection().getRepository(UserEntity)),
-    posts: new PostsDataSource(getConnection().getRepository(PostEntity))
+    users: new UserDataSource(UserEntity),
+    posts: new PostsDataSource(PostEntity, { connectionName: 'otherConnection' })
   })
 })
 ```

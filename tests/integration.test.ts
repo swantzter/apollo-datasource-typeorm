@@ -1,5 +1,5 @@
 /* eslint-env mocha */
-import { createConnection, getConnection, Repository } from 'typeorm'
+import { createConnection, EntityTarget, getConnection } from 'typeorm'
 import assert from 'assert'
 
 import { TypeormDataSource } from '../src'
@@ -30,8 +30,7 @@ describe('TypeormDataSource', () => {
   })
 
   beforeEach(() => {
-    const connection = getConnection()
-    userSource = new UserDataSource(connection.getRepository(UserEntity))
+    userSource = new UserDataSource(UserEntity)
     userSource.initialize({ context: null, cache: new InMemoryLRUCache() })
   })
 
@@ -40,21 +39,19 @@ describe('TypeormDataSource', () => {
     await connection.getRepository(UserEntity).clear()
   })
 
-  it('Should throw if not given a typeorm repository', async () => {
+  it('Should throw if not given a typeorm entity', async () => {
     assert.throws(() => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const _ = new UserDataSource(true as unknown as Repository<UserEntity>)
-    }, err => {
-      assert.strictEqual(err.name, 'Error')
-      assert.strictEqual(err.message, 'TypeormDataSource must be created with a TypeORM repository')
-      return true
+      const _ = new UserDataSource(true as unknown as EntityTarget<UserEntity>)
+    }, {
+      name: 'RepositoryNotFoundError',
+      message: 'No repository for "true" was found. Looks like this entity is not registered in current "default" connection?'
     })
   })
 
   it('Should throw if not called on an initialised instance', async () => {
     assert.throws(() => {
-      const connection = getConnection()
-      const uninitialised = new UserDataSource(connection.getRepository(UserEntity))
+      const uninitialised = new UserDataSource(UserEntity)
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       uninitialised.findOneById('a') // this isn't a promise
     }, err => {

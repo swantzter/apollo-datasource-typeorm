@@ -2,12 +2,13 @@ import { DataSource, DataSourceConfig } from 'apollo-datasource'
 import { ApolloError } from 'apollo-server-errors'
 import { InMemoryLRUCache } from 'apollo-server-caching'
 
-import { isTypeormRepository, Logger } from './helpers'
+import { Logger } from './helpers'
 import { createCachingMethods, CachedMethods, FindArgs } from './cache'
-import { DeepPartial, ObjectID, Repository, SelectQueryBuilder } from 'typeorm'
+import { DeepPartial, EntityTarget, getConnection, ObjectID, Repository, SelectQueryBuilder } from 'typeorm'
 
 export interface TypeormDataSourceOptions {
   logger?: Logger
+  connectionName?: string
 }
 
 export type ID = string | number | Date | ObjectID
@@ -102,15 +103,11 @@ export class TypeormDataSource<TEntity, TContext>
     return result
   }
 
-  constructor (repo: Repository<TEntity>, options: TypeormDataSourceOptions = {}) {
+  constructor (entity: EntityTarget<TEntity>, options: TypeormDataSourceOptions = {}) {
     super()
     options?.logger?.info('TypeormDataSource started')
+    const repo = getConnection(options.connectionName).getRepository(entity)
 
-    if (!isTypeormRepository(repo)) {
-      throw new ApolloError(
-        'TypeormDataSource must be created with a TypeORM repository'
-      )
-    }
     if (repo.metadata.hasMultiplePrimaryKeys) {
       throw new ApolloError('TypeormDataSource currently doesn\'t support entities with multiple primary keys')
     }
