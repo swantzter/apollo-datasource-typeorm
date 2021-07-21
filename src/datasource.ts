@@ -76,10 +76,7 @@ export class TypeormDataSource<TEntity, TContext>
   }
 
   async updateOne (data: TEntity) {
-    await this.repo.update((data as any)[this.idColumn], data)
-
-    const result = await this.repo.findOne((data as any)[this.idColumn])
-    if (!result) throw new ApolloError('Failed to update entity')
+    const result = await this.repo.save(data)
     this.primeLoader(result)
     return result
   }
@@ -89,10 +86,10 @@ export class TypeormDataSource<TEntity, TContext>
       `TypeormDataSource/updateOnePartial: Updating doc id ${id} contents: ${JSON.stringify(data, null, '')}`
     )
     const { [this.idColumn]: _id, ...cleanData } = data as any
-    await this.repo.update(id, cleanData)
+    const found = await this.repo.findOne(id)
+    if (!found) throw new ApolloError('COuld not find entity to update')
 
-    const result = await this.repo.findOne(id)
-    if (!result) throw new ApolloError('Failed to update entity')
+    const result = await this.repo.save(this.repo.merge(found, cleanData))
     this.primeLoader(result)
     return result
   }

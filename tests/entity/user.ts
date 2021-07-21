@@ -1,4 +1,7 @@
 import {
+  AfterInsert,
+  AfterRemove,
+  AfterUpdate,
   Column,
   CreateDateColumn,
   DeleteDateColumn,
@@ -26,4 +29,21 @@ export class UserEntity {
 
   @DeleteDateColumn()
   deletedAt: Date
+
+  #insertHook = false
+  #updateHook = false
+  #removeHook = false
+
+  get insertHook () { return this.#insertHook }
+  get updateHook () { return this.#updateHook }
+  get removeHook () { return this.#removeHook }
+
+  @AfterInsert()
+  afterInsert () { this.#insertHook = true }
+
+  @AfterUpdate()
+  afterUpdate () { this.#updateHook = true }
+
+  @AfterRemove()
+  afterRemove () { this.#removeHook = true }
 }

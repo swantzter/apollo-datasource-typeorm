@@ -1,5 +1,5 @@
 /* eslint-env mocha */
-import { createConnection, getConnection } from 'typeorm'
+import { createConnection, getConnection, getRepository } from 'typeorm'
 import assert from 'assert'
 
 import { TypeormDataSource } from '../src'
@@ -63,6 +63,9 @@ describe('TypeormDataSource', () => {
       assert.notStrictEqual(data.updatedAt, undefined)
       assert.strictEqual(data.deletedAt, null)
       assert.strictEqual(data.name, null)
+      assert.strictEqual(data.insertHook, true)
+      assert.strictEqual(data.updateHook, false)
+      assert.strictEqual(data.removeHook, false)
     })
 
     describe('updateOne', () => {
@@ -71,10 +74,14 @@ describe('TypeormDataSource', () => {
           email: 'hello@test.com'
         })
 
-        const { id: updatedId, ...updated } = await userSource.updateOne({ id: createdId, ...created, name: 'Test' })
+        const data = await userSource.updateOne(getRepository(UserEntity).create({ id: createdId, ...created, name: 'Test' }))
+        const { id: updatedId, ...updated } = data
 
         assert.strictEqual(updatedId, createdId)
         assert.notDeepStrictEqual(updated, created)
+        assert.strictEqual(data.insertHook, false)
+        assert.strictEqual(data.updateHook, true)
+        assert.strictEqual(data.removeHook, false)
       })
     })
   })
@@ -89,11 +96,15 @@ describe('TypeormDataSource', () => {
       }
 
       const { id: createdId, ...created } = await userSource.createOne(createData)
-      const { id: updatedId, ...updated } = await userSource.updateOnePartial(createdId, updateData)
+      const data = await userSource.updateOnePartial(createdId, updateData)
+      const { id: updatedId, ...updated } = data
 
       assert.strictEqual(updatedId, createdId)
       assert.notStrictEqual(created.updatedAt, updated.updatedAt)
       assert.deepStrictEqual({ name: updated.name, email: updated.email }, { ...createData, ...updateData })
+      assert.strictEqual(data.insertHook, false)
+      assert.strictEqual(data.updateHook, true)
+      assert.strictEqual(data.removeHook, false)
     })
 
     it('Partial update should update cache', async () => {
@@ -138,10 +149,13 @@ describe('TypeormDataSource', () => {
         email: 'hello@test.com'
       })
 
-      await userSource.deleteOne(createdId)
+      const data = await userSource.deleteOne(createdId)
 
       const result = await getConnection().getRepository(UserEntity).findOne(createdId)
       assert.strictEqual(result, undefined)
+      assert.strictEqual(data.insertHook, false)
+      assert.strictEqual(data.updateHook, true) // soft-remove is an update
+      assert.strictEqual(data.removeHook, false) // not run on soft remove
     })
   })
 
