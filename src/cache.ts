@@ -71,8 +71,6 @@ export const createCachingMethods = <DType>({
 
   const cachePrefix = `typeorm-${(entity as any).name}`
 
-  console.log(cachePrefix)
-
   const methods: CachedMethods<DType> = {
     findOneById: async (id, { ttl } = {}) => {
       options?.logger?.debug(`TypeormDataSource: Running query for ID ${id}`)
