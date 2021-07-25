@@ -4,7 +4,8 @@ import { InMemoryLRUCache } from 'apollo-server-caching'
 
 import { Logger } from './helpers'
 import { createCachingMethods, CachedMethods, FindArgs } from './cache'
-import { DeepPartial, EntityTarget, getConnection, ObjectID, SelectQueryBuilder } from 'typeorm'
+import { DeepPartial, EntityTarget, FindConditions, getConnection, ObjectID, SelectQueryBuilder } from 'typeorm'
+import { EntityFieldsNames } from 'typeorm/common/EntityFieldsNames'
 
 export interface TypeormDataSourceOptions {
   logger?: Logger
@@ -17,7 +18,10 @@ const placeholderHandler = () => {
   throw new Error('DataSource not initialized')
 }
 
-export type QueryFindArgs = FindArgs
+export type QueryFindArgs<TEntity> = FindArgs & {
+  order?: Partial<Record<EntityFieldsNames<TEntity>, 'ASC' | 'DESC' | 1 | -1>>
+  withDeleted?: boolean
+}
 
 export class TypeormDataSource<TEntity, TContext>
   extends DataSource<TContext>
@@ -37,21 +41,25 @@ export class TypeormDataSource<TEntity, TContext>
 
   async findManyByQuery (
     queryFunction: (qb: SelectQueryBuilder<TEntity>) => SelectQueryBuilder<TEntity>,
-    { ttl }: QueryFindArgs = {}
+    { ttl }: FindArgs = {}
   ) {
     const qb = getConnection(this.options.connectionName).getRepository(this.entity).createQueryBuilder()
     const results = await queryFunction(qb).getMany()
     // prime these into the dataloader and maybe the cache
-    if (this.dataLoader && results) {
-      this.primeLoader(results, ttl)
-    }
-    this.options?.logger?.info(
-      `TypeormDataSource/findManyByQuery: complete. rows: ${results.length}`
-    )
+    this.primeLoader(results, ttl)
+    this.options?.logger?.info(`TypeormDataSource/findManyByQuery: complete. rows: ${results.length}`)
     return results
   }
 
-  async createOne (newEntity: DeepPartial<TEntity> | TEntity, { ttl }: QueryFindArgs = {}) {
+  async findManyWhere (where: FindConditions<TEntity>, { ttl, order, withDeleted }: QueryFindArgs<TEntity> = {}) {
+    this.options?.logger?.debug(`TypeormDataSource/findManyWhere: Running query where ${JSON.stringify(where)}`)
+    const results = await this.repo.find({ where, order, withDeleted })
+    this.primeLoader(results, ttl)
+    this.options?.logger?.info(`TypeormDataSource/findManyWhere: complete. rows: ${results.length}`)
+    return results
+  }
+
+  async createOne (newEntity: DeepPartial<TEntity> | TEntity, { ttl }: FindArgs = {}) {
     if (this.idColumn in newEntity) {
       return await this.updateOne(newEntity as TEntity)
     } else {

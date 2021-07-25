@@ -13,9 +13,6 @@ const orderDocs = <V>(ids: readonly ID[], idColumn: string) => (
     keyFn ??
     ((source: V) => {
       if ((source as any)[idColumn]) return (source as any)[idColumn]
-      throw new Error(
-        'Could not find ID for object; if using an alternate key, pass in a key function'
-      )
     })
 
   const checkNotUndefined = (input: V | undefined): input is V => {
@@ -26,11 +23,11 @@ const orderDocs = <V>(ids: readonly ID[], idColumn: string) => (
     .filter(checkNotUndefined)
     .map((record: V) => [keyFnDef(record), record])
   )
-  return ids.map((id) => idMap.get(id) ?? Error('Could not find ID for object; if using an alternate key, pass in a key function'))
+  return ids.map(id => idMap.get(id) ?? new Error('Could not find ID for object; if using an alternate key, pass in a key function'))
 }
 
-export interface createCatchingMethodArgs<DType> {
-  entity: EntityTarget<DType>
+export interface createCatchingMethodArgs<TEntity> {
+  entity: EntityTarget<TEntity>
   cache: KeyValueCache
   options: TypeormDataSourceOptions
 }
@@ -39,51 +36,46 @@ export interface FindArgs {
   ttl?: number
 }
 
-export interface CachedMethods<DType> {
-  findOneById: (id: ID, args?: FindArgs) => Promise<DType | undefined>
-  findManyByIds: (
-    ids: ID[],
-    args?: FindArgs
-  ) => Promise<Array<DType | undefined>>
+export interface CachedMethods<TEntity> {
+  findOneById: (id: ID, args?: FindArgs) => Promise<TEntity | undefined>
+  findManyByIds: (ids: ID[], args?: FindArgs) => Promise<Array<TEntity | undefined>>
   deleteFromCacheById: (id: ID) => Promise<void>
-  dataLoader?: DataLoader<ID, DType, string>
+  dataLoader?: DataLoader<ID, TEntity, string>
   cache?: KeyValueCache
   cachePrefix?: string
-  primeLoader: (item: DType | DType[], ttl?: number) => void
+  primeLoader: (item: TEntity | TEntity[], ttl?: number) => void
 }
 
-export const createCachingMethods = <DType>({
+export const createCachingMethods = <TEntity>({
   entity,
   cache,
   options
-}: createCatchingMethodArgs<DType>): CachedMethods<DType> => {
+}: createCatchingMethodArgs<TEntity>): CachedMethods<TEntity> => {
   const getRepo = () => getConnection(options.connectionName).getRepository(entity)
   const getIdColumn = () => getRepo().metadata.primaryColumns[0].propertyName
 
-  const loader = new DataLoader<ID, DType>(async (ids) => {
+  const loader = new DataLoader<ID, TEntity>(async (ids) => {
     const results = await getRepo().findByIds([...ids])
-    options?.logger?.debug(
-      `TypeormDataSource/DataLoader: response count: ${results.length}`
-    )
+    options?.logger?.debug(`TypeormDataSource/DataLoader: response count: ${results.length}`)
 
-    return orderDocs<DType>(ids, getIdColumn())(results)
+    return orderDocs<TEntity>(ids, getIdColumn())(results)
   })
 
   const cachePrefix = `typeorm-${(entity as any).name}`
 
-  const methods: CachedMethods<DType> = {
+  const methods: CachedMethods<TEntity> = {
     findOneById: async (id, { ttl } = {}) => {
       options?.logger?.debug(`TypeormDataSource: Running query for ID ${id}`)
       const key = `${cachePrefix}${id}`
 
       const cacheDoc = await cache.get(key)
       if (cacheDoc) {
-        return getRepo().create(EJSON.parse(cacheDoc) as DType)
+        return getRepo().create(EJSON.parse(cacheDoc) as TEntity)
       }
 
       const doc = await loader.load(id)
 
-      if (Number.isInteger(ttl)) {
+      if (Number.isInteger(ttl) && !(doc instanceof Error)) {
         await cache.set(key, EJSON.stringify(doc), { ttl })
       }
 
@@ -107,6 +99,10 @@ export const createCachingMethods = <DType>({
     primeLoader: async (entities, ttl?: number) => {
       entities = Array.isArray(entities) ? entities : [entities]
       for (const entity of entities) {
+        // make sure we don't cache deleted entities
+        const deleteDateColumn = getRepo().metadata.deleteDateColumn?.propertyName
+        if (deleteDateColumn && (entity as any)[deleteDateColumn]) continue
+
         loader.prime((entity as any)[getIdColumn()], entity)
         const key = `${cachePrefix}${(entity as any)[getIdColumn()]}`
         if (!!ttl || !!(await cache.get(key))) {

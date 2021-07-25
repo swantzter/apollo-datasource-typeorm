@@ -1,5 +1,5 @@
 /* eslint-env mocha */
-import { createConnection, getConnection, getRepository } from 'typeorm'
+import { createConnection, getConnection, getRepository, Not } from 'typeorm'
 import assert from 'assert'
 
 import { TypeormDataSource } from '../src'
@@ -15,12 +15,8 @@ let userSource: UserDataSource
 describe('TypeormDataSource', () => {
   before(async () => {
     await createConnection({
-      type: 'mysql',
-      host: process.env.DB_HOST ?? 'db',
-      port: 3306,
-      username: 'root',
-      password: 'mysql_strong_password',
-      database: 'test',
+      type: 'sqlite',
+      database: ':memory:',
       synchronize: true,
       logging: false,
       entities: [
@@ -251,6 +247,138 @@ describe('TypeormDataSource', () => {
       const result = await userSource.findManyByQuery(qb => qb.where('email = :email', { email }).orderBy('name'))
 
       assert.deepStrictEqual(result.map(u => u.id), [idOne, idTwo])
+    })
+  })
+
+  describe('findManyWhere', () => {
+    it('Should find entities by where query', async () => {
+      // make sure we have extra users in the db, avoid cached methods when creating
+      const repo = getConnection().getRepository(UserEntity)
+      const email = 'hello@test.com'
+      const users = [
+        {
+          email,
+          name: 'One'
+        },
+        {
+          email,
+          name: 'Two'
+        },
+        {
+          email: 'other@test.com',
+          name: 'Three'
+        }
+      ]
+      const [{ id: idOne }, { id: idTwo }] = await repo.save(repo.create(users))
+
+      const result = await userSource.findManyWhere({ email })
+
+      assert.deepStrictEqual(result.map(u => u.id), [idOne, idTwo])
+    })
+
+    it('Should find by where with FindOperator', async () => {
+      // make sure we have extra users in the db, avoid cached methods when creating
+      const repo = getConnection().getRepository(UserEntity)
+      const email = 'hello@test.com'
+      const users = await repo.save(repo.create([
+        {
+          email,
+          name: 'One'
+        },
+        {
+          email,
+          name: 'Two'
+        },
+        {
+          email: 'other@test.com',
+          name: 'Three'
+        }
+      ]))
+
+      const result = await userSource.findManyWhere({ email: Not(email) })
+
+      assert.deepStrictEqual(result.map(u => u.id), [users[2].id])
+    })
+
+    it('Should prime the dataloader and cache with the results', async () => {
+      const repo = getConnection().getRepository(UserEntity)
+      const email = 'hello@test.com'
+      const users = [
+        {
+          email,
+          name: 'One'
+        },
+        {
+          email,
+          name: 'Two'
+        },
+        {
+          email: 'other@test.com',
+          name: 'Three'
+        }
+      ]
+      await repo.save(repo.create(users))
+
+      const result = await userSource.findManyWhere({ email }, { ttl: 5 })
+      // update outside of dataloader to avoid the cache being updated
+      await repo.update({ email }, { name: 'New' })
+      const reloaded = await userSource.findManyByIds(result.map(u => u.id), { ttl: 5 })
+
+      assert.deepStrictEqual(result, reloaded)
+    })
+
+    it('Should not prime the dataloader and cache with soft deleted entities', async () => {
+      const repo = getConnection().getRepository(UserEntity)
+      const email = 'hello@test.com'
+      const users = await repo.save(repo.create([
+        {
+          email,
+          name: 'One',
+          deletedAt: new Date()
+        },
+        {
+          email,
+          name: 'Two'
+        },
+        {
+          email: 'other@test.com',
+          name: 'Three'
+        }
+      ]))
+
+      const result = await userSource.findManyWhere({ name: users[0].name }, { ttl: 5, withDeleted: true })
+      await assert.rejects(async () => {
+        await userSource.findOneById(result[0].id, { ttl: 5 })
+      }, {
+        name: 'Error',
+        message: 'Could not find ID for object; if using an alternate key, pass in a key function'
+      })
+
+      assert.notDeepStrictEqual(result, null)
+    })
+
+    it('Should find and order entities by where query', async () => {
+      // make sure we have extra users in the db, avoid cached methods when creating
+      const repo = getConnection().getRepository(UserEntity)
+      const email = 'hello@test.com'
+      const users = await repo.save(repo.create([
+        {
+          email,
+          name: 'c'
+        },
+        {
+          email,
+          name: 'b'
+        },
+        {
+          email,
+          name: 'a'
+        }
+      ]))
+
+      const result = await userSource.findManyWhere({ email }, { order: { name: 'ASC' } })
+
+      assert.deepStrictEqual(result, users.sort((a, b) => a.name.localeCompare(b.name)))
     })
   })
 })
