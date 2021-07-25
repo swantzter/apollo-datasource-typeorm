@@ -148,10 +148,27 @@ describe('TypeormDataSource', () => {
       const data = await userSource.deleteOne(createdId)
 
       const result = await getConnection().getRepository(UserEntity).findOne(createdId)
+      const deletedResult = await getConnection().getRepository(UserEntity).findOne(createdId, { withDeleted: true })
       assert.strictEqual(result, undefined)
+      assert.notStrictEqual(deletedResult, undefined)
       assert.strictEqual(data.insertHook, false)
       assert.strictEqual(data.updateHook, true) // soft-remove is an update
       assert.strictEqual(data.removeHook, false) // not run on soft remove
+    })
+
+    it('Should hard delete a soft deleted entity', async () => {
+      const { id: createdId } = await userSource.createOne({
+        email: 'hello@test.com',
+        deletedAt: new Date()
+      })
+
+      const data = await userSource.deleteOne(createdId, { hard: true })
+
+      const result = await getConnection().getRepository(UserEntity).findOne(createdId, { withDeleted: true })
+      assert.strictEqual(result, undefined)
+      assert.strictEqual(data.insertHook, false)
+      assert.strictEqual(data.updateHook, false)
+      assert.strictEqual(data.removeHook, true)
     })
   })
 
