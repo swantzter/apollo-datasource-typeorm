@@ -76,7 +76,7 @@ export class TypeormDataSource<TEntity, TContext>
     this.options?.logger?.info(
       `TypeormDataSource/deleteOne: deleting id: '${id}'`
     )
-    const entity = await this.repo.findOne(id)
+    const entity = await this.repo.findOne(id, { withDeleted: hard })
     if (!entity) throw new ApolloError('Cannot remove, entity does not exist')
     const response = await (hard ? this.repo.remove(entity) : this.repo.softRemove(entity))
     await this.deleteFromCacheById(id)
